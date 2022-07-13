@@ -14,11 +14,16 @@ from scipy.stats import gamma, poisson
 st.markdown('# COVID-19 有效传染数估计')
 # 等同于 title
 
+# 数据载入模块（多行注释会展示出来）
+# 当前提供两种数据载入方式
+# 1. 自动下载全球每日病例病例
+# 2. 手动上传病例数据（目前只支持深圳市数据）
 st.markdown('## 数据载入')
 
 DATA_URL = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/'
             'csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv')
 
+# 读取全球病例数据并进行预处理
 @st.cache
 def load_data():
     df_data = pd.read_csv(DATA_URL)
@@ -30,15 +35,20 @@ def load_data():
     df_final['日期'] = pd.to_datetime(df_final['日期']).dt.date
     return df_final
 
+# 针对中文格式的日期进行转换
 def date_chn(x):
     x = x.str.split('日').str[0].add('日')
     x = x.str.replace('年', '-').str.replace('月', '-').str.replace('日', '')
     x = pd.to_datetime(x, format='%Y-%m-%d', errors='coerce').dt.date
     return x
 
+#处理手动上传的病例数据
 @st.cache
 def process_upload_data(df):
     df[['jzrq']] = df[['jzrq']].apply(date_chn)
+    df = df.groupby('jzrq')['xzqz'].sum().reset_index(name="每日新增")
+    df.rename(columns={"jzrq": "日期"}, inplace=True)
+    df['地区'] = '深圳'
     return df
     # TODO 每日病例累加 & 格式转换
 
@@ -61,7 +71,7 @@ elif option == '手动上传数据':
     if uploaded_file is not None:
         upload_data = pd.read_csv(uploaded_file)
         upload_data = process_upload_data(upload_data)
-        st.write(upload_data)
+        data = upload_data
 
 if st.checkbox('查看原始数据'):
     st.markdown('### 原始数据')
@@ -114,29 +124,29 @@ region = st.sidebar.selectbox(
      data['地区'].unique()) # 下拉框支持列表、字典、Series
 
 df_region = data[data['地区'] == region]
+df_region = df_region.sort_values(by=['日期'])
+df_region = df_region.reset_index(drop=True)
 
 # 在筛选范围前计算每日增量
 @st.cache
 def calculate_add(df_region):
-    df_region = df_region.sort_values(by=['日期'])
-    df_region = df_region.reset_index(drop=True)
-    for index, row in df_region.iterrows():
-        if index == 0:
-            df_region.loc[index, "每日新增"] = row['总数']
-        else:
-            previous_count = df_region.loc[index - 1, "总数"]
-            cnt = row['总数'] - previous_count
-            if cnt >= 0:
-                df_region.loc[index, "每日新增"] = cnt
+    if '总数' in df_region.columns:
+        for index, row in df_region.iterrows():
+            if index == 0:
+                df_region.loc[index, "每日新增"] = row['总数']
             else:
-                df_region.loc[index, "每日新增"] = 0
+                previous_count = df_region.loc[index - 1, "总数"]
+                cnt = row['总数'] - previous_count
+                if cnt >= 0:
+                    df_region.loc[index, "每日新增"] = cnt
+                else:
+                    df_region.loc[index, "每日新增"] = 0
 
-    df_region['每日新增'] = df_region['每日新增'].astype(int)
+        df_region['每日新增'] = df_region['每日新增'].astype(int)
 
     return df_region
 
-if option == '全球每日病例数据':
-    df_region = calculate_add(df_region)
+df_region = calculate_add(df_region)
 
 # 选择时间范围
 start_day = st.sidebar.date_input(
@@ -178,7 +188,6 @@ def get_R_result(df_region):
         gt_distribution = use_si_distrb,
         smoothing_window=smoothing_window, r_window_size=r_window)
     return ch_time_varying_r
-
 
 ch_time_varying_r = get_R_result(df_region)
 
