@@ -50,12 +50,10 @@ def process_upload_data(df):
     df.rename(columns={"jzrq": "日期"}, inplace=True)
     df['地区'] = '深圳'
     return df
-    # TODO 每日病例累加 & 格式转换
-
 
 option = st.selectbox(
      '请选择数据源',
-     ('全球每日病例数据', '手动上传数据'))
+     ('全球每日病例数据', '手动上传数据', '社会面与总量对比'))
 
 # data = pd.DataFrame(columns=['地区', '日期', '总数'])
 data = load_data()
@@ -73,9 +71,31 @@ elif option == '手动上传数据':
         upload_data = process_upload_data(upload_data)
         data = upload_data
 
+elif option == '社会面与总量对比':
+    uploaded_file = st.file_uploader("请选择 excel 文件")
+    dtype = st.radio(
+     "请选择传染数计算所基于的数据类型",
+     ('总病例数', '社会面病例'))
+
+    if uploaded_file is not None:
+        upload_data = pd.read_excel(uploaded_file)
+        upload_data['报告时间'] = pd.to_datetime(upload_data['报告时间']).dt.date
+        if dtype == '社会面病例':
+            upload_data.drop(columns=['总病例数'], inplace=True)
+            upload_data.rename(columns={"报告时间": "日期", "社会面病例": "每日新增"}, inplace=True)
+        else:
+            upload_data.drop(columns=['社会面病例'], inplace=True)
+            upload_data.rename(columns={"报告时间": "日期", "总病例数": "每日新增"}, inplace=True)
+        upload_data['地区'] = '北京'
+        data = upload_data
+        # upload_data = process_upload_data(upload_data)
+        # data = upload_data
+
 if st.checkbox('查看原始数据'):
     st.markdown('### 原始数据')
     st.dataframe(data)
+
+
 
 st.markdown('## 计算有效传染数 $R_t$')
 
