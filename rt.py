@@ -3,8 +3,6 @@ import openai
 
 st.markdown('# ChatGPT demo')
 
-openai.api_key = "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"
-
 
 def init_session():
     if 'round' not in st.session_state:
@@ -21,8 +19,11 @@ def init_session():
 
 
 init_session()
+code_input = st.text_input('请输入使用密钥')
 system_input = st.text_input('请设定 ChatGPT 角色（用于生成符合角色的回答）', "你是一个有用的AI助手")
 latest_input = st.text_area('请输入内容')
+
+openai.api_key = code_input
 
 if st.button('发送'):
     st.session_state['question'].append(latest_input)
